@@ -6,7 +6,7 @@
 
 locals {
   optionq = var.is_internal ? "i" : "e"
-  lb_name = var.name_prefix != "" ? format("nlb-%s-%s-%s", local.optionq, var.name_prefix, local.system_name) : format("nlb-%s-%s", local.optionq, local.system_name)
+  lb_name = var.name_prefix != "" ? format("nlb-%s-%s-%s", local.optionq, var.name_prefix, local.system_name_short) : format("nlb-%s-%s", local.optionq, local.system_name_short)
   local_mappings = [
     for item in range(length(var.private_subnet_ids)) : {
       subnet_id    = var.private_subnet_ids[item]
@@ -27,7 +27,7 @@ resource "aws_lb" "this" {
   internal                   = var.is_internal
   load_balancer_type         = "network"
   security_groups            = [aws_security_group.this.id]
-  subnets                    = var.is_internal ? var.private_subnet_ids : var.public_subnet_ids
+  subnets                    = var.is_internal && length(local.address_mappings) <= 0 ? var.private_subnet_ids : (length(local.address_mappings) <= 0 ? var.public_subnet_ids : null)
   ip_address_type            = var.ip_address_type
   enable_deletion_protection = var.delete_protection
 
