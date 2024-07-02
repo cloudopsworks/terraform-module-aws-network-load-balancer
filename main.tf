@@ -8,13 +8,13 @@ locals {
   optionq = var.is_internal ? "i" : "e"
   lb_name = var.name_prefix != "" ? format("nlb-%s-%s-%s", local.optionq, var.name_prefix, local.system_name) : format("nlb-%s-%s", local.optionq, local.system_name)
   local_mappings = [
-    for item in range(0, length(var.private_subnet_ids) - 1) : {
+    for item in range(length(var.private_subnet_ids)) : {
       subnet_id    = var.private_subnet_ids[item]
       ipv4_address = var.private_ip_addresses[item]
     }
   ]
   public_mappings = [
-    for item in range(0, length(var.public_subnet_ids) - 1) : {
+    for item in range(length(var.public_subnet_ids)) : {
       subnet_id     = var.public_subnet_ids[item]
       allocation_id = var.public_ip_ids[item]
     }
