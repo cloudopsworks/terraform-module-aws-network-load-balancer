@@ -58,9 +58,9 @@ resource "aws_lb_listener" "listener" {
   for_each          = var.listener_config
   load_balancer_arn = aws_lb.this.arn
   port              = each.value.port
-  protocol          = each.value.protocol
-  certificate_arn   = each.value.certificate_arn
-  alpn_policy       = each.value.alpn_policy
+  protocol          = try(each.value.protocol, "TCP")
+  certificate_arn   = try(each.value.certificate_arn, null)
+  alpn_policy       = try(each.value.alpn_policy, null)
 
   default_action {
     type             = "forward"
