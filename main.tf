@@ -69,7 +69,7 @@ resource "aws_lb_listener" "listener" {
   tags = merge(
     local.all_tags,
     {
-      Name = format("nlb-%s-%s", each.key, local.system_name)
+      Name = format("nlb-%s-%s-listener", each.key, local.system_name)
     }
   )
 }
