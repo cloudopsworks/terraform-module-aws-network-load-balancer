@@ -11,20 +11,136 @@ copyrights:
 github_repo: cloudopsworks/terraform-module-aws-network-load-balancer
 
 description: |-
-  
+  This Terraform module sets up and configures an AWS Network Load Balancer (NLB). 
+  It supports internal or external usage, optional cross-zone load balancing, and configurable subnets and IP addresses. 
+  It also allows adding multiple listeners and associating them with target groups.
 
 # Introduction to the project
 introduction: |-
-#  This is an introduction.
+  This module provides a straightforward way to manage NLB resources. It supports:
+    - Internal and external NLB deployments.
+    - Customizable name prefixes.
+    - Control over IP address types and subnets.
+    - Flexible listener configurations for forwarding traffic to multiple target groups.
+    - Mergeable tags to keep resources well-organized.
 
 # How to use this project
 usage: |-
+  ## Variables
+
+  Below is a summary of key variables that can be configured:
+
+  - **is_hub** (bool): Identifies if this is a “hub” configuration. Defaults to `false`.
+  - **spoke_def** (string): Identifier to distinguish spoke resources. Defaults to `"001"`.
+  - **org** (object): Contains organizational settings (e.g., name, environment, etc.).
+  - **extra_tags** (map(string)): Additional tags merged into resource tags.
+
+  **NLB-Specific Variables**:
+  - **is_internal** (bool): Whether the NLB is internal (`true`) or external (`false`). Defaults to `true` (internal).
+  - **name_prefix** (string): Optional prefix for the load balancer name. Defaults to `""`.
+  - **ip_address_type** (string): IP address type, e.g. `"ipv4"`. Defaults to `"ipv4"`.
+  - **delete_protection** (bool): When `true`, prevents accidental deletion of the load balancer. Defaults to `true`.
+  - **vpc_id** (string): The ID of the VPC where the load balancer will be provisioned.
+  - **private_subnet_ids** (list(string)): List of private subnet IDs, if using an internal load balancer.
+  - **public_subnet_ids** (list(string)): List of public subnet IDs, if using an external load balancer.
+  - **public_ip_ids** (list(string)): List of EIP allocation IDs for public subnets, if applicable.
+  - **private_ip_addresses** (list(string)): Private IP addresses to assign alongside subnet IDs.
+  - **listener_config** (any): Map of listener blocks defining port, protocol, certificates, etc. Each entry references a target group ARN.
+  - **enable_cross_zone** (bool): Enables cross-zone load balancing if set to `true`. Defaults to `false`.
+
+  ## Using with Terragrunt
+
+  When using Terragrunt, reference this module’s repository and specify inputs. For example:
+
+  ```hcl
+  terraform {
+    # Points to the module source. Adjust the ref to the needed branch or tag.
+    source = "git::git@github.com:cloudopsworks/terraform-module-aws-network-load-balancer.git?ref=develop"
+  }
+
+  include "root" {
+    path = find_in_parent_folders()
+  }
+
+  # Dependencies on other modules, e.g. VPC, target groups, etc.
+  dependency "vpc" {
+    config_path = "../vpc"
+  }
+
+  dependency "target-group" {
+    config_path = "../target-group"
+  }
+
+  inputs = {
+    is_internal        = true
+    name_prefix        = "example-nlb"
+    vpc_id             = dependency.vpc.outputs.vpc_id
+    private_subnet_ids = dependency.vpc.outputs.private_subnet_ids
+
+    listener_config = {
+      "listener1" = {
+        port             = 80
+        protocol         = "TCP"
+        target_group_arn = dependency.target-group.outputs.tg_arn
+      }
+    }
+  }
+  ```
 
 # Example usage
 examples: |-
+  Below is a more detailed example showing how to provision an internal NLB with multiple listeners:
+
+  ```hcl
+  terraform {
+    source = "git::git@github.com:cloudopsworks/terraform-module-aws-network-load-balancer.git?ref=develop"
+  }
+
+  include "root" {
+    path = find_in_parent_folders()
+  }
+
+  dependency "vpc" {
+    config_path = "../vpc"
+  }
+
+  dependency "backend-services" {
+    config_path = "../backend-services"
+  }
+
+  inputs = {
+    is_internal = true
+    name_prefix = "my-internal-nlb"
+    vpc_id      = dependency.vpc.outputs.vpc_id
+
+    private_subnet_ids  = dependency.vpc.outputs.private_subnets
+    private_ip_addresses = [
+      "10.0.1.10",
+      "10.0.2.10"
+    ]
+
+    listener_config = {
+      "web-backend" = {
+        port             = 80
+        protocol         = "TCP"
+        target_group_arn = dependency.backend-services.outputs.web_tg_arn
+      }
+      "tcp-backend" = {
+        port             = 443
+        protocol         = "TCP"
+        target_group_arn = dependency.backend-services.outputs.tcp_tg_arn
+      }
+    }
+  }
+  ```
 
 # How to get started quickly
 quickstart: |-
+  1. Make sure you have a VPC and subnets (public or private) where you want to deploy the load balancer.
+  2. Add a Terragrunt or Terraform configuration referencing this module and pass the appropriate variables.
+  3. Adjust or create your target groups (listeners require references to target group ARNs).
+  4. Run `terragrunt init` (or `terraform init`, if using Terraform directly), then `terragrunt apply`.
+  5. Monitor the creation process and confirm the NLB is active. Log in to the AWS console to see the newly created resource.
 
 include:
   - "docs/targets.md"
