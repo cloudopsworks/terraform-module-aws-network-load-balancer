@@ -23,13 +23,14 @@ locals {
 }
 
 resource "aws_lb" "this" {
-  name                       = local.lb_name
-  internal                   = var.is_internal
-  load_balancer_type         = "network"
-  security_groups            = [aws_security_group.this.id]
-  subnets                    = var.is_internal && length(local.address_mappings) <= 0 ? var.private_subnet_ids : (length(local.address_mappings) <= 0 ? var.public_subnet_ids : null)
-  ip_address_type            = var.ip_address_type
-  enable_deletion_protection = var.delete_protection
+  name                             = local.lb_name
+  internal                         = var.is_internal
+  load_balancer_type               = "network"
+  security_groups                  = [aws_security_group.this.id]
+  subnets                          = var.is_internal && length(local.address_mappings) <= 0 ? var.private_subnet_ids : (length(local.address_mappings) <= 0 ? var.public_subnet_ids : null)
+  ip_address_type                  = var.ip_address_type
+  enable_deletion_protection       = var.delete_protection
+  enable_cross_zone_load_balancing = var.enable_cross_zone
 
   dynamic "subnet_mapping" {
     for_each = local.address_mappings

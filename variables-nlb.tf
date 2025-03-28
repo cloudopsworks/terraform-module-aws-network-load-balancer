@@ -53,3 +53,8 @@ variable "listener_config" {
   type    = any
   default = {}
 }
+
+variable "enable_cross_zone" {
+  type    = bool
+  default = false
+}
