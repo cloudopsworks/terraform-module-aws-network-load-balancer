@@ -15,9 +15,16 @@
 
 
 
-This Terraform module sets up and configures an AWS Network Load Balancer (NLB). 
-It supports internal or external usage, optional cross-zone load balancing, and configurable subnets and IP addresses. 
-It also allows adding multiple listeners and associating them with target groups.
+This Terraform module creates and manages AWS Network Load Balancers (NLB) with comprehensive configuration options.
+Features include:
+  - Support for both internal and external NLB deployments
+  - IPv4 and dual-stack IP address types
+  - Configurable deletion protection
+  - Flexible subnet configuration (private/public)
+  - Custom IP address assignment capability
+  - Multiple listener configuration with TCP/TLS support
+  - Cross-zone load balancing options
+  - Integrated tagging system
 
 
 ---
@@ -52,12 +59,16 @@ We have [*lots of terraform modules*][terraform_modules] that are Open Source an
 
 ## Introduction
 
-This module provides a straightforward way to manage NLB resources. It supports:
-  - Internal and external NLB deployments.
-  - Customizable name prefixes.
-  - Control over IP address types and subnets.
-  - Flexible listener configurations for forwarding traffic to multiple target groups.
-  - Mergeable tags to keep resources well-organized.
+This module offers a comprehensive solution for AWS Network Load Balancer management with the following capabilities:
+  - Dual-mode deployment supporting both internal and internet-facing configurations
+  - Flexible naming with customizable prefixes for resource identification
+  - IP address type selection (IPv4 or dual-stack)
+  - Granular subnet control with support for both private and public subnets
+  - Custom IP address assignment for network interface planning
+  - Advanced listener configuration supporting TCP and TLS protocols
+  - Optional cross-zone load balancing for improved availability
+  - Deletion protection for production workloads
+  - Extensible tagging system with environment-specific defaults
 
 ## Usage
 
@@ -129,20 +140,69 @@ inputs = {
 
 ## Quick Start
 
-1. Make sure you have a VPC and subnets (public or private) where you want to deploy the load balancer.
-2. Add a Terragrunt or Terraform configuration referencing this module and pass the appropriate variables.
-3. Adjust or create your target groups (listeners require references to target group ARNs).
-4. Run `terragrunt init` (or `terraform init`, if using Terraform directly), then `terragrunt apply`.
-5. Monitor the creation process and confirm the NLB is active. Log in to the AWS console to see the newly created resource.
+Follow these steps to quickly deploy an AWS Network Load Balancer:
+
+1. Prerequisites:
+   - Existing VPC with appropriate subnets (public or private)
+   - Target groups for your backend services
+   - SSL certificates (if using TLS listeners)
+
+2. Create a new Terragrunt configuration:
+   ```hcl
+   # terragrunt.hcl
+   terraform {
+     source = "git::git@github.com:cloudopsworks/terraform-module-aws-network-load-balancer.git?ref=v1.0.0"
+   }
+
+   include "root" {
+     path = find_in_parent_folders()
+   }
+
+   inputs = {
+     org = {
+       organization_unit = "myorg"
+       environment_name = "dev"
+       environment_type = "development"
+     }
+
+     is_internal = true
+     vpc_id = "vpc-1234567890"
+     private_subnet_ids = ["subnet-1234", "subnet-5678"]
+
+     listener_config = {
+       "app" = {
+         port = 80
+         protocol = "TCP"
+         target_group_arn = "arn:aws:elasticloadbalancing:region:account:targetgroup/tg-name/tg-id"
+       }
+     }
+   }
+   ```
+
+3. Initialize and deploy:
+   ```bash
+   terragrunt init
+   terragrunt plan    # Review the planned changes
+   terragrunt apply   # Deploy the NLB
+   ```
+
+4. Verify deployment:
+   - Check AWS Console > EC2 > Load Balancers
+   - Confirm listener configuration
+   - Test connectivity through the NLB
+
+5. Next steps:
+   - Configure DNS records pointing to the NLB
+   - Monitor NLB metrics in CloudWatch
+   - Set up health checks and alerts
 
 
 ## Examples
 
-Below is a more detailed example showing how to provision an internal NLB with multiple listeners:
-
+### Internal NLB with Multiple Listeners
 ```hcl
 terraform {
-  source = "git::git@github.com:cloudopsworks/terraform-module-aws-network-load-balancer.git?ref=develop"
+  source = "git::git@github.com:cloudopsworks/terraform-module-aws-network-load-balancer.git?ref=v1.0.0"
 }
 
 include "root" {
@@ -158,27 +218,91 @@ dependency "backend-services" {
 }
 
 inputs = {
-  is_internal = true
-  name_prefix = "my-internal-nlb"
-  vpc_id      = dependency.vpc.outputs.vpc_id
+  org = {
+    organization_unit = "myorg"
+    environment_name = "prod"
+    environment_type = "production"
+  }
 
-  private_subnet_ids  = dependency.vpc.outputs.private_subnets
+  is_internal = true
+  name_prefix = "backend-nlb"
+  vpc_id = dependency.vpc.outputs.vpc_id
+
+  private_subnet_ids = dependency.vpc.outputs.private_subnets
   private_ip_addresses = [
     "10.0.1.10",
     "10.0.2.10"
   ]
 
   listener_config = {
-    "web-backend" = {
-      port             = 80
-      protocol         = "TCP"
+    "http" = {
+      port = 80
+      protocol = "TCP"
       target_group_arn = dependency.backend-services.outputs.web_tg_arn
     }
-    "tcp-backend" = {
-      port             = 443
-      protocol         = "TCP"
-      target_group_arn = dependency.backend-services.outputs.tcp_tg_arn
+    "https" = {
+      port = 443
+      protocol = "TLS"
+      certificate_arn = "arn:aws:acm:region:account:certificate/cert-id"
+      target_group_arn = dependency.backend-services.outputs.ssl_tg_arn
     }
+  }
+
+  enable_cross_zone = true
+  delete_protection = true
+
+  extra_tags = {
+    Component = "Backend"
+    Service = "API"
+  }
+}
+```
+
+### External NLB with Public IPs
+```hcl
+terraform {
+  source = "git::git@github.com:cloudopsworks/terraform-module-aws-network-load-balancer.git?ref=v1.0.0"
+}
+
+include "root" {
+  path = find_in_parent_folders()
+}
+
+dependency "vpc" {
+  config_path = "../vpc"
+}
+
+dependency "frontend" {
+  config_path = "../frontend"
+}
+
+inputs = {
+  org = {
+    organization_unit = "myorg"
+    environment_name = "prod"
+    environment_type = "production"
+  }
+
+  is_internal = false
+  name_prefix = "public-nlb"
+  vpc_id = dependency.vpc.outputs.vpc_id
+
+  public_subnet_ids = dependency.vpc.outputs.public_subnets
+  public_ip_ids = dependency.vpc.outputs.elastic_ips
+
+  listener_config = {
+    "web" = {
+      port = 80
+      protocol = "TCP"
+      target_group_arn = dependency.frontend.outputs.web_tg_arn
+    }
+  }
+
+  enable_cross_zone = true
+
+  extra_tags = {
+    Component = "Frontend"
+    Access = "Public"
   }
 }
 ```
@@ -201,6 +325,7 @@ Available targets:
 | Name | Version |
 |------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.3 |
+| <a name="requirement_aws"></a> [aws](#requirement\_aws) | ~> 5.81 |
 
 ## Providers
 
@@ -218,32 +343,34 @@ Available targets:
 
 | Name | Type |
 |------|------|
+| [aws_ec2_tag.lb_eni](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ec2_tag) | resource |
 | [aws_lb.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb) | resource |
 | [aws_lb_listener.listener](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb_listener) | resource |
 | [aws_security_group.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/security_group) | resource |
 | [aws_vpc_security_group_egress_rule.sg_all](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc_security_group_egress_rule) | resource |
 | [aws_vpc_security_group_ingress_rule.listener](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc_security_group_ingress_rule) | resource |
+| [aws_network_interfaces.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/network_interfaces) | data source |
 | [aws_region.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/region) | data source |
 
 ## Inputs
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_delete_protection"></a> [delete\_protection](#input\_delete\_protection) | n/a | `bool` | `true` | no |
-| <a name="input_enable_cross_zone"></a> [enable\_cross\_zone](#input\_enable\_cross\_zone) | n/a | `bool` | `false` | no |
+| <a name="input_delete_protection"></a> [delete\_protection](#input\_delete\_protection) | Enable deletion protection for the Network Load Balancer | `bool` | `true` | no |
+| <a name="input_enable_cross_zone"></a> [enable\_cross\_zone](#input\_enable\_cross\_zone) | (optional) Enable cross-zone load balancing for the Network Load Balancer | `bool` | `false` | no |
 | <a name="input_extra_tags"></a> [extra\_tags](#input\_extra\_tags) | n/a | `map(string)` | `{}` | no |
-| <a name="input_ip_address_type"></a> [ip\_address\_type](#input\_ip\_address\_type) | n/a | `string` | `"ipv4"` | no |
+| <a name="input_ip_address_type"></a> [ip\_address\_type](#input\_ip\_address\_type) | IP address type for the Network Load Balancer, either 'ipv4' or 'dualstack' | `string` | `"ipv4"` | no |
 | <a name="input_is_hub"></a> [is\_hub](#input\_is\_hub) | Establish this is a HUB or spoke configuration | `bool` | `false` | no |
-| <a name="input_is_internal"></a> [is\_internal](#input\_is\_internal) | Defaults to external ALB | `bool` | `true` | no |
-| <a name="input_listener_config"></a> [listener\_config](#input\_listener\_config) | n/a | `any` | `{}` | no |
-| <a name="input_name_prefix"></a> [name\_prefix](#input\_name\_prefix) | n/a | `string` | `""` | no |
+| <a name="input_is_internal"></a> [is\_internal](#input\_is\_internal) | Set to true for an internal Network Load Balancer, false for an external one | `bool` | `true` | no |
+| <a name="input_listener_config"></a> [listener\_config](#input\_listener\_config) | Configuration for listeners on the Network Load Balancer | `any` | `{}` | no |
+| <a name="input_name_prefix"></a> [name\_prefix](#input\_name\_prefix) | Prefix for the Network Load Balancer name | `string` | `""` | no |
 | <a name="input_org"></a> [org](#input\_org) | n/a | <pre>object({<br/>    organization_name = string<br/>    organization_unit = string<br/>    environment_type  = string<br/>    environment_name  = string<br/>  })</pre> | n/a | yes |
-| <a name="input_private_ip_addresses"></a> [private\_ip\_addresses](#input\_private\_ip\_addresses) | n/a | `list(string)` | `[]` | no |
-| <a name="input_private_subnet_ids"></a> [private\_subnet\_ids](#input\_private\_subnet\_ids) | n/a | `list(string)` | `[]` | no |
-| <a name="input_public_ip_ids"></a> [public\_ip\_ids](#input\_public\_ip\_ids) | n/a | `list(string)` | `[]` | no |
-| <a name="input_public_subnet_ids"></a> [public\_subnet\_ids](#input\_public\_subnet\_ids) | n/a | `list(string)` | `[]` | no |
+| <a name="input_private_ip_addresses"></a> [private\_ip\_addresses](#input\_private\_ip\_addresses) | (optional) List of private IP addresses for the Network Load Balancer in private subnets | `list(string)` | `[]` | no |
+| <a name="input_private_subnet_ids"></a> [private\_subnet\_ids](#input\_private\_subnet\_ids) | List of private subnet IDs for the Network Load Balancer, optional if using public subnets | `list(string)` | `[]` | no |
+| <a name="input_public_ip_ids"></a> [public\_ip\_ids](#input\_public\_ip\_ids) | (optional) List of public IP allocation IDs for the Network Load Balancer in public subnets | `list(string)` | `[]` | no |
+| <a name="input_public_subnet_ids"></a> [public\_subnet\_ids](#input\_public\_subnet\_ids) | List of public subnet IDs for the Network Load Balancer, optional if using private subnets | `list(string)` | `[]` | no |
 | <a name="input_spoke_def"></a> [spoke\_def](#input\_spoke\_def) | n/a | `string` | `"001"` | no |
-| <a name="input_vpc_id"></a> [vpc\_id](#input\_vpc\_id) | n/a | `string` | n/a | yes |
+| <a name="input_vpc_id"></a> [vpc\_id](#input\_vpc\_id) | VPC ID where the Network Load Balancer will be created | `string` | n/a | yes |
 
 ## Outputs
 
