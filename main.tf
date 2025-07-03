@@ -82,7 +82,7 @@ resource "aws_lb_listener" "listener" {
 data "aws_network_interfaces" "this" {
   filter {
     name   = "interface-type"
-    values = ["network-load-balancer"]
+    values = ["network_load_balancer"]
   }
   filter {
     name   = "subnet-id"
