@@ -98,7 +98,7 @@ data "aws_network_interfaces" "this" {
 resource "aws_ec2_tag" "lb_eni" {
   for_each = merge([
     for sub in range(length(coalesce(var.private_subnet_ids, var.public_subnet_ids))) : {
-      for k, v in local.all_tags : "${sub}-${k}" => {
+      for k, v in merge(local.all_tags, { Name = local.lb_name }) : "${sub}-${k}" => {
         index     = sub
         tag_key   = k
         tag_value = v
